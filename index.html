@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HI SHSH</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            overflow: hidden;
+        }
+        #clickButton {
+            padding: 15px 30px;
+            font-size: 20px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            transition: background-color 0.3s;
+            z-index: 10;
+        }
+        #clickButton:hover {
+            background-color: #45a049;
+        }
+        canvas {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <button id="clickButton">CLICK me</button>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer, balloon, textMesh, popTextMesh;
+        let showScene = false;
+        let balloonPopped = false;
+        let textScale = 0; // For text animation
+        let textAnimationActive = false;
+
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xffffff); // White background
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 2, 5);
+            camera.lookAt(0, 1.5, 0);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+            renderer.domElement.style.display = 'none';
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+            directionalLight.position.set(5, 5, 5);
+            scene.add(directionalLight);
+
+            // 3D Stick Figure
+            // Head (sphere)
+            const headGeometry = new THREE.SphereGeometry(0.3, 32, 32);
+            const headMaterial = new THREE.MeshBasicMaterial({ color: 0xffe4c4 });
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.set(0, 1.5, 0);
+            scene.add(head);
+
+            // Eyes (small black spheres)
+            const eyeGeometry = new THREE.SphereGeometry(0.05, 16, 16);
+            const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            leftEye.position.set(-0.1, 1.55, 0.25);
+            scene.add(leftEye);
+            const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            rightEye.position.set(0.1, 1.55, 0.25);
+            scene.add(rightEye);
+
+            // Smile (thin torus)
+            const smileGeometry = new THREE.TorusGeometry(0.1, 0.02, 16, 100, Math.PI);
+            const smileMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            const smile = new THREE.Mesh(smileGeometry, smileMaterial);
+            smile.position.set(0, 1.45, 0.25);
+            smile.rotation.x = Math.PI / 2;
+            scene.add(smile);
+
+            // Body (cylinder)
+            const bodyGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.6, 32);
+            const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0x4682b4 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.set(0, 1, 0);
+            scene.add(body);
+
+            // Legs (cylinders)
+            const legGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.8, 32);
+            const legMaterial = new THREE.MeshBasicMaterial({ color: 0x333333 });
+            const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
+            leftLeg.position.set(-0.15, 0.4, 0);
+            scene.add(leftLeg);
+            const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
+            rightLeg.position.set(0.15, 0.4, 0);
+            scene.add(rightLeg);
+
+            // Arms (cylinders)
+            const armGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.5, 32);
+            const armMaterial = new THREE.MeshBasicMaterial({ color: 0x333333 });
+            const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+            leftArm.position.set(-0.3, 1.2, 0);
+            leftArm.rotation.z = Math.PI / 4;
+            scene.add(leftArm);
+            const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+            rightArm.position.set(0.3, 1.2, 0);
+            rightArm.rotation.z = -Math.PI / 4;
+            scene.add(rightArm);
+
+            // Balloon
+            const balloonGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+            const balloonMaterial = new THREE.MeshBasicMaterial({ color: 0xff4040 });
+            balloon = new THREE.Mesh(balloonGeometry, balloonMaterial);
+            balloon.position.set(-0.5, 2, 0);
+            scene.add(balloon);
+
+            // Balloon string
+            const stringGeometry = new THREE.BufferGeometry();
+            const stringVertices = new Float32Array([-0.3, 1.2, 0, -0.5, 2, 0]);
+            stringGeometry.setAttribute('position', new THREE.BufferAttribute(stringVertices, 3));
+            const stringMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+            const stringLine = new THREE.Line(stringGeometry, stringMaterial);
+            scene.add(stringLine);
+
+            // "Pop the balloon" text (larger font)
+            const popTextCanvas = document.createElement('canvas');
+            popTextCanvas.width = 256;
+            popTextCanvas.height = 64;
+            const popTextCtx = popTextCanvas.getContext('2d');
+            popTextCtx.font = '24px Arial';
+            popTextCtx.fillStyle = '#333';
+            popTextCtx.textAlign = 'center';
+            popTextCtx.fillText('Pop the balloon', 128, 40);
+            const popTextTexture = new THREE.CanvasTexture(popTextCanvas);
+            const popTextMaterial = new THREE.SpriteMaterial({ map: popTextTexture });
+            popTextMesh = new THREE.Sprite(popTextMaterial);
+            popTextMesh.position.set(-0.5, 2.3, 0);
+            popTextMesh.scale.set(1.2, 0.3, 1);
+            scene.add(popTextMesh);
+
+            // Raycaster for balloon click
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+
+            renderer.domElement.addEventListener('click', (event) => {
+                if (!showScene || balloonPopped) return;
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects([balloon]);
+                if (intersects.length > 0) {
+                    balloonPopped = true;
+                    scene.remove(balloon);
+                    scene.remove(popTextMesh);
+                    scene.remove(stringLine);
+
+                    // Add "iloveyouu mwa" text with animation
+                    const textCanvas = document.createElement('canvas');
+                    textCanvas.width = 256;
+                    textCanvas.height = 64;
+                    const textCtx = textCanvas.getContext('2d');
+                    textCtx.font = 'bold 32px Arial';
+                    textCtx.fillStyle = '#ff0000';
+                    textCtx.textAlign = 'center';
+                    textCtx.fillText('iloveyouu mwa', 128, 40);
+                    const textTexture = new THREE.CanvasTexture(textCanvas);
+                    const textMaterial = new THREE.SpriteMaterial({ map: textTexture });
+                    textMesh = new THREE.Sprite(textMaterial);
+                    textMesh.position.set(0, 2, 0); // Above head
+                    textMesh.scale.set(0, 0, 0); // Start small for animation
+                    scene.add(textMesh);
+                    textAnimationActive = true;
+                }
+            });
+        }
+
+        function animate() {
+            if (!showScene) return;
+            requestAnimationFrame(animate);
+
+            // Animate "iloveyouu mwa" text (scale up)
+            if (textAnimationActive && textMesh) {
+                textScale += 0.05;
+                if (textScale <= 1) {
+                    textMesh.scale.set(2 * textScale, 0.5 * textScale, 1);
+                } else {
+                    textMesh.scale.set(2, 0.5, 1);
+                    textAnimationActive = false;
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        document.getElementById('clickButton').addEventListener('click', () => {
+            showScene = true;
+            renderer.domElement.style.display = 'block';
+            document.getElementById('clickButton').style.display = 'none';
+            animate();
+        });
+
+        init();
+    </script>
+</body>
+</html>
